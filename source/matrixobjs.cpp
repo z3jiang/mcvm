@@ -17,6 +17,11 @@
 
 // Include the blas and lapack header files (C-specific)
 
+#ifdef MCVM_USE_EIGEN
+#include <Eigen/Core>
+#define max(a,b) ((a) >= (b) ? (a) : (b))
+#endif
+
 #ifdef MCVM_USE_CLAPACK
 extern "C"
 {
@@ -485,6 +490,12 @@ template <> MatrixObj<float64>* MatrixObj<float64>::matrixMult(const MatrixObj* 
 	// If either of the input matrices are isEmpty, return early
 	if (pMatrixA->isEmpty() || pMatrixB->isEmpty())
 		return pResult;
+#ifdef MCVM_USE_EIGEN
+        Eigen::Map<Eigen::MatrixXd> matA(pMatrixA->m_pElements,pMatrixA->m_size[0],pMatrixA->m_size[1]) ;
+        Eigen::Map<Eigen::MatrixXd> matB(pMatrixB->m_pElements,pMatrixB->m_size[0],pMatrixB->m_size[1]) ;
+        Eigen::Map<Eigen::MatrixXd> res(pResult->m_pElements,pResult->m_size[0],pResult->m_size[1]) ;
+        res = matA * matB ;
+#endif
 
 #ifdef MCVM_USE_CLAPACK
 	// Call the BLAS function to perform the multiplication
@@ -537,6 +548,18 @@ template <> MatrixObj<Complex128>* MatrixObj<Complex128>::matrixMult(const Matri
 		return pResult;
 	
 	// Create complex objects for the alpha and beta parameters
+#ifdef MCVM_USE_EIGEN
+        Eigen::Map<Eigen::MatrixXcd> matA(pMatrixA->m_pElements,pMatrixA->m_size[0],pMatrixA->m_size[1]) ;
+        Eigen::Map<Eigen::MatrixXcd> matB(pMatrixB->m_pElements,pMatrixB->m_size[0],pMatrixB->m_size[1]) ;
+        Eigen::Map<Eigen::MatrixXcd> res(pResult->m_pElements,pResult->m_size[0],pResult->m_size[1]) ;
+	#include <iostream>
+	std::cout << "Matrice A " << matA << std::endl ;
+	std::cout << "Matrice B " << matB << std::endl ;
+
+        res = matA * matB ;
+	std::cout << "Matrice R " << res << std::endl ;
+#endif
+
 #ifdef MCVM_USE_CLAPACK
 	// Call the BLAS function to perform the multiplication
 	// This computes: alpha*A*B + beta*C, A(m,k), B(k,n), C(m,n)
@@ -594,6 +617,13 @@ template <> MatrixObj<float64>* MatrixObj<float64>::scalarMult(const MatrixObj* 
   if (pMatrix->isEmpty())
     return pResult;
 
+#ifdef MCVM_USE_EIGEN
+  // To support multidimentionnal matrix, "fake" a one dimension
+  Eigen::Map<Eigen::MatrixXd> mat(pMatrix->m_pElements,pMatrix->m_numElements,1) ;
+  Eigen::Map<Eigen::MatrixXd> res(pResult->m_pElements,pResult->m_numElements,1) ;
+  res = mat * scalar ;
+#endif
+
 #ifdef MCVM_USE_CLAPACK
   // Call the BLAS function to perform the multiplication
   // This computes: y = alpha * x + y
@@ -630,6 +660,13 @@ template <> MatrixObj<Complex128>* MatrixObj<Complex128>::scalarMult(const Matri
 	// If the input matrix is isEmpty, return early
 	if (pMatrix->isEmpty())
 		return pResult;
+
+#ifdef MCVM_USE_EIGEN
+  // To support multidimentionnal matrix, "fake" a one dimension
+  Eigen::Map<Eigen::MatrixXcd> mat(pMatrix->m_pElements,pMatrix->m_numElements,1) ;
+  Eigen::Map<Eigen::MatrixXcd> res(pResult->m_pElements,pResult->m_numElements,1) ;
+  res = mat * scalar ;
+#endif
 
 #ifdef MCVM_USE_CLAPACK
 	// Call the BLAS function to perform the multiplication
