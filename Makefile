@@ -1,6 +1,6 @@
 INCLUDE = -Ivendor/include -Ilib/include
 CXXFLAGS =   $(INCLUDE) -Wall -g -std=c++11
-CXXFLAGS += -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -DMCVM_USE_JIT -DMCVM_USE_LAPACKE
+CXXFLAGS += -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -DMCVM_USE_JIT -DMCVM_USE_EIGEN
 LLVMLIBS = $(shell vendor/bin/llvm-config --libfiles)
 LIBS = -pthread  -ldl -llapacke
 LIBS +=  vendor/lib/libgccpp.a  vendor/lib/libgc.a 

@@ -10,7 +10,7 @@ BUILD IT
 The easiest way to compile is to use the bootstrap.sh,
 which will populate the /vendor directory with
 LLVM and Boehm GC (it already contains Eigen matrix
-library and TCLAP).
+library in lib/).
 
 Some useful definitions are :
 * MCVM_USE_JIT to compile the jit compiler (need LLVM) (recommended)
