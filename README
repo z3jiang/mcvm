@@ -20,6 +20,10 @@ Some useful definitions are :
 * MCVM_USE_DIMVECTOR
 * MCVM_USE_PLOTTING
 
+Required libs and headers:
+libatlas
+liblapacke
+
 License
 =========
 

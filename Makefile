@@ -1,10 +1,11 @@
-INCLUDE = -Ivendor/include -Ilib/include
+INCLUDE = -Ivendor/include -Ilib/include -Iinclude
 CXXFLAGS =   $(INCLUDE) -Wall -g -std=c++11
 CXXFLAGS += -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -DMCVM_USE_JIT -DMCVM_USE_EIGEN
 LLVMLIBS = $(shell vendor/bin/llvm-config --libfiles)
 LIBS = -pthread  -ldl -llapacke
 LIBS +=  vendor/lib/libgccpp.a  vendor/lib/libgc.a 
 CXX = g++-4.8
+CXX = g++
 
 all:	source/analysis_arraycopy.o source/analysis_boundscheck.o source/analysis_copyplacement.o source/analysis_livevars.o \
 	source/analysismanager.o source/analysis_metrics.o source/analysis_reachdefs.o source/dotexpr.o source/structobj.o source/analysis_typeinfer.o source/arrayobj.o \
