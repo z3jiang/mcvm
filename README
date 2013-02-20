@@ -9,16 +9,16 @@ BUILD IT
 
 The easiest way to compile is to use the bootstrap.sh,
 which will populate the /vendor directory with
-LLVM and Boehm GC.
+LLVM and Boehm GC (it already contains Eigen matrix
+library and TCLAP).
 
 Some useful definitions are :
 * MCVM_USE_JIT to compile the jit compiler (need LLVM) (recommended)
+* MCVM_USE_EIGEN to compile using Eigen as a backend for matrix operations (recommended)
 * MCVM_USE_LAPACKE
 * MCVM_USE_CLAPACK
 * MCVM_USE_DIMVECTOR
 * MCVM_USE_PLOTTING
-
-To run it, you will need a natlab.sh and a Natlab.jar in your PATH.
 
 License
 =========
