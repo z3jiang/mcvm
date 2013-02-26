@@ -82,7 +82,8 @@ ConfigVar::ConfigVar(
 	m_maxValue = maxVal;
 	
 	// Ensure that we can set the initial default value
-	assert (setValue(defaultVal));
+	bool success = setValue(defaultVal);
+	assert(success);
 }
 	 
 /***************************************************************
