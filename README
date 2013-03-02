@@ -28,3 +28,11 @@ License
 =========
 
 License BSD - McGill University
+
+
+Differences from Matlab
+=========
+
+Avoid OO, structs, lambda, etc
+
+McVM should be 100% compatible with Matlab syntax. *should*
