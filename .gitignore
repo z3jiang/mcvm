@@ -2,3 +2,6 @@
 vendor
 build
 .tup
+*.P
+mcvm
+*~
