@@ -49,10 +49,8 @@
 #include "transform_split.h"
 
 // Config variable to enable/disable the JIT compiler
-ConfigVar JITCompiler::s_jitEnableVar("jit_enable", ConfigVar::BOOL, "false");
-
-// Config variable to enable/disable array deep copy
-ConfigVar JITCompiler::s_jitCopyEnableVar("jit_copy_enable", ConfigVar::BOOL, "false");
+ConfigVar JITCompiler::s_jitEnableVar("jit_enable", ConfigVar::BOOL, "true");
+ConfigVar JITCompiler::s_jitCopyEnableVar("jit_copy_enable", ConfigVar::BOOL, "true");
 
 // Config variable to enable/disable on-stack replacement capability
 ConfigVar JITCompiler::s_jitOsrEnableVar("jit_osr_enable", ConfigVar::BOOL, "false");
