@@ -100,10 +100,6 @@ public:
 	// LLVM value pair type definition
 	typedef std::pair<llvm::Value*, llvm::Value*> LLVMValuePair;
 	
-	// Void pointer type constant
-	static llvm::Type* VOID_PTR_TYPE;
-	//static llvm::Type* VOID_PTR_TYPE_IDIOM() ;
-	
 	// Method to initialize the JIT compiler
 	static void initialize();
 	
@@ -823,12 +819,6 @@ private:
 		const LLVMValueVector& arguments
 	);	
 	
-	// Method to create a pointer constant
-	static llvm::Constant* createPtrConst(
-		const void* pPointer,
-		llvm::Type* valType = llvm::Type::getInt8Ty(*s_Context)
-	);
-	
 	static void setUpParameters(ProgFunction* pFunction, CompFunction& compFunction,  CompVersion& compVersion,
 	const TypeSetString& argTypeStr);
 	
@@ -882,9 +872,6 @@ private:
                 const TypeInfo&
                 );
 
-	// Method to get the integer type for a given size in bytes
-	static llvm::Type* getIntType(size_t sizeInBytes);
-	
 	// Method to get the constant corresponding to an object type
 	static llvm::Constant* getObjType(DataObject::Type objType);
 

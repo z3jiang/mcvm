@@ -18,6 +18,7 @@
 // =========================================================================== //
 
 // Header files
+#include <vector>
 #include <cassert>
 #include <iostream>
 #include <llvm/Module.h>
@@ -48,6 +49,10 @@
 #include "transform_logic.h"
 #include "transform_split.h"
 #include "configmanager.h"
+#include "hotspot/profiler.h"
+#include "utils/llvmutils.h"
+
+using namespace LLVMUtils;
 
 //FIXME
 Statement *global_stmt;
@@ -70,22 +75,6 @@ ConfigVar JITCompiler::s_jitNoReadBoundChecks("jit_no_read_bound_checks", Config
 ConfigVar JITCompiler::s_jitNoWriteBoundChecks("jit_no_write_bound_checks", ConfigVar::BOOL, "false");
 
 llvm::LLVMContext* JITCompiler::s_Context;
-
-// Void pointer type constant
-// Calling a static LLVM Object can lead to bugs since the initialization order is undefined
-// http://www.parashift.com/c++-faq-lite/ctors.html#faq-10.15
-// We use the Construct on First Use Idiom
-
-//BUG
-llvm::Type* JITCompiler::VOID_PTR_TYPE ;
-
-// Correction
-/*
-llvm::Type* JITCompiler::VOID_PTR_TYPE() {
-  static llvm::Type* llvm_type = llvm::PointerType::getUnqual(llvm::Type::getInt8Ty(*s_Context));
-  return llvm_type ;
-}
-*/
 
 // LLVM module to store functions
 llvm::Module* JITCompiler::s_pModule = NULL;
@@ -165,9 +154,8 @@ void JITCompiler::initialize()
 {
     llvm::InitializeNativeTarget();
 
-    s_Context = new llvm::LLVMContext() ;
-
-    VOID_PTR_TYPE = llvm::PointerType::getUnqual(llvm::Type::getInt8Ty(*s_Context));
+    s_Context = new llvm::LLVMContext();
+    LLVMUtils::initialize(s_Context);
 
     // Create the LLVM module object
     s_pModule = new llvm::Module("mcvm", *s_Context);
@@ -478,6 +466,9 @@ void JITCompiler::initialize()
     ConfigManager::registerVar(&s_jitCopyEnableVar);
     ConfigManager::registerVar(&s_jitOsrEnableVar);
     ConfigManager::registerVar(&s_jitOsrStrategyVar);
+
+
+    hotspot::Profiler::get()->initialize(s_pExecEngine, s_pModule);
 }
 
 /***************************************************************
@@ -504,6 +495,8 @@ N.A. Lameed, 2011, 2012.
 */
 void JITCompiler::shutdown()
 {
+    hotspot::Profiler::get()->shutdown();
+
     delete s_pFunctionPasses;
     delete s_pPrintPass;
 
@@ -1152,9 +1145,9 @@ JITCompiler::CompVersion* JITCompiler::findFunction(ProgFunction* pFunction, Arr
     FunctionMap::iterator funcItr = s_functionMap.find(pFunction);
 
     // If the version of this function is not yet compiled
-    if (funcItr == s_functionMap.end() || funcItr->second.versions.find(argTypeStr) == funcItr->second.versions.end())
+    if (funcItr == s_functionMap.end() ||
+        funcItr->second.versions.find(argTypeStr) == funcItr->second.versions.end())
     {
-        // Compile the requested function version
         compileFunction(pFunction, argTypeStr);
     }
 
@@ -1182,15 +1175,16 @@ JITCompiler::CompVersion* JITCompiler::findFunction(ProgFunction* pFunction, Arr
   return &compVersion ;
 }
 
-ArrayObj* JITCompiler::callFunction(ProgFunction* pFunction, ArrayObj* pArguments, size_t outArgCount) {
+ArrayObj* JITCompiler::callFunction(ProgFunction* pFunction,
+    ArrayObj* pArguments, size_t outArgCount)
+{
+  CompVersion* compVersion = findFunction(pFunction, pArguments, outArgCount);
 
-  CompVersion* compVersion = findFunction(pFunction,pArguments,outArgCount) ;
+  // Call the wrapper function with the input arguments
+  ArrayObj* pOutput = compVersion->pWrapperPtr(pArguments, outArgCount);
 
-    // Call the wrapper function with the input arguments
-    ArrayObj* pOutput = compVersion->pWrapperPtr(pArguments, outArgCount);
-
-    // Return the output array
-    return pOutput;
+  // Return the output array
+  return pOutput;
 }
 
 /***************************************************************
@@ -1966,8 +1960,7 @@ llvm::Type* JITCompiler::widestStorageMode(
     else if (modeA == llvm::Type::getInt1Ty(*s_Context) || modeB == llvm::Type::getInt1Ty(*s_Context))
         return llvm::Type::getInt1Ty(*s_Context);
 
-    // Invalid mode specified
-    assert (false);
+    throw std::runtime_error("Invalid mode specified");
 }
 
 /***************************************************************
@@ -2491,7 +2484,7 @@ llvm::Value* JITCompiler::changeStorageMode(
                 *current_typeinfo) ;
     }
 
-    assert (false && "Invalid type conversion requested");
+    throw std::runtime_error("Invalid type conversion requested");
 }
 
 /***************************************************************
@@ -3782,7 +3775,7 @@ llvm::BasicBlock* JITCompiler::compAssignStmt(
              */
 
             DotExpr* pDotExpr = (DotExpr*)pLeftExpr ;
-            auto root_expr = pDotExpr->getRootSymbol() ;
+//            auto root_expr = pDotExpr->getRootSymbol(); unused
 
             // If we are in verbose mode, log the binary op code generation
             if (ConfigManager::s_verboseVar)
@@ -6134,7 +6127,8 @@ JITCompiler::Value JITCompiler::compDotExpr(
     if (ConfigManager::s_verboseVar)
         std::cout << "Generating code for dot expr \"" << pDotExpr->toString() << "\" evaluation" << std::endl;
 
-    assert(false) ; //TODO
+    // TODO
+    throw std::runtime_error("unimplemented");
 }
 
 /***************************************************************
@@ -6405,6 +6399,9 @@ JITCompiler::ValueVector JITCompiler::compFunctionCall(
         llvm::BasicBlock* pEntryBlock, 
         llvm::BasicBlock* pExitBlock)
 {
+  hotspot::Profiler::get()->instrumentFuncCall(
+      callerFunction.pProgFunc, pCalleeFunc, pEntryBlock);
+
     // Add the callee function to the callee set
     callerFunction.callees.insert(pCalleeFunc);
 
@@ -6412,7 +6409,8 @@ JITCompiler::ValueVector JITCompiler::compFunctionCall(
     Expression::SymbolSet writeSet;
 
     // If the callee is a program function nested inside the caller function
-    if (pCalleeFunc->isProgFunction() == true && ((ProgFunction*)pCalleeFunc)->getParent() == callerFunction.pProgFunc)
+    if (pCalleeFunc->isProgFunction() == true &&
+        ((ProgFunction*)pCalleeFunc)->getParent() == callerFunction.pProgFunc)
     {
         // Get a typed pointer to the callee function
         ProgFunction* pProgFunc = (ProgFunction*)pCalleeFunc;
@@ -6454,7 +6452,8 @@ JITCompiler::ValueVector JITCompiler::compFunctionCall(
     }
 
     // If the callee is a program function nested inside the caller function
-    if (pCalleeFunc->isProgFunction() == true && ((ProgFunction*)pCalleeFunc)->getParent() == callerFunction.pProgFunc)
+    if (pCalleeFunc->isProgFunction() == true &&
+        ((ProgFunction*)pCalleeFunc)->getParent() == callerFunction.pProgFunc)
     {
         // Create an IR builder for the current basic block
         llvm::IRBuilder<> currentBuilder(pEntryBlock);
@@ -6515,8 +6514,11 @@ JITCompiler::ValueVector JITCompiler::compFunctionCall(
         }
     }
 
-    // If the function is a library function with a fixed argument count and optimized library functions should be used
-    if (pCalleeFunc->isProgFunction() == false && argCountFixed == true && s_jitUseLibOpts == true)
+    // If the function is a library function with a fixed argument count
+    // and optimized library functions should be used
+    if (pCalleeFunc->isProgFunction() == false &&
+        argCountFixed == true &&
+        s_jitUseLibOpts == true)
     {
 
         // Get the possible return types
@@ -6591,8 +6593,10 @@ JITCompiler::ValueVector JITCompiler::compFunctionCall(
 
     // If the function is a library function, or it should not be JIT compiled,
     // or the argument count is not fixed, or direct calls should not be used
-    if (pCalleeFunc->isProgFunction() == false || ((ProgFunction*)pCalleeFunc)->isScript() == true ||
-        argCountFixed == false || s_jitUseDirectCalls == false
+    if (pCalleeFunc->isProgFunction() == false ||
+        ((ProgFunction*)pCalleeFunc)->isScript() == true ||
+        argCountFixed == false ||
+        s_jitUseDirectCalls == false
     )
     {
         // Create an IR builder for the current basic block
@@ -6804,14 +6808,17 @@ void JITCompiler::compFuncCallJIT(
     CompVersion& calleeVersion = versionItr->second;
 
     // Get the call input/output structures
-    LLVMValuePair callStructs = getCallStructs(callerFunction, callerVersion, calleeFunction, calleeVersion);
+    LLVMValuePair callStructs = getCallStructs(
+        callerFunction, callerVersion, calleeFunction, calleeVersion);
 
     // Create an IR builder for the current basic block
     llvm::IRBuilder<> currentBuilder(pEntryBlock);
 
     // Cast the in/out struct pointers to the proper type
-    llvm::Value* pInStructPtr = currentBuilder.CreateBitCast(callStructs.first, llvm::PointerType::getUnqual(calleeVersion.pInStructType));
-    llvm::Value* pOutStructPtr = currentBuilder.CreateBitCast(callStructs.second, llvm::PointerType::getUnqual(calleeVersion.pOutStructType));
+    llvm::Value* pInStructPtr = currentBuilder.CreateBitCast(
+        callStructs.first, llvm::PointerType::getUnqual(calleeVersion.pInStructType));
+    llvm::Value* pOutStructPtr = currentBuilder.CreateBitCast(
+        callStructs.second, llvm::PointerType::getUnqual(calleeVersion.pOutStructType));
 
     // If there are too many input arguments
     if (arguments.size() > pProgFunc->getInParams().size())
@@ -8601,53 +8608,6 @@ llvm::CallInst* JITCompiler::createNativeCall(
     return pValue;
 }
 
-/***************************************************************
-* Function: JITCompiler::createPtrConst()
-* Purpose : Compile a pointer constant
-* Initial : Maxime Chevalier-Boisvert on March 9, 2009
-****************************************************************
-Revisions and bug fixes:
-*/
-llvm::Constant* JITCompiler::createPtrConst(const void* pPointer, llvm::Type* valType)
-{
-    // Get the integer type matching the size of pointers on this platform
-    llvm::Type* intType = getIntType(PLATFORM_POINTER_SIZE);
-
-    // Create a constant integer from the pointer value
-    llvm::Constant* constInt = llvm::ConstantInt::get(intType, (int64)pPointer);
-
-    // Cast the integer into a pointer to the desired type
-    llvm::Constant* constPtr = llvm::ConstantExpr::getIntToPtr(
-        constInt,
-        llvm::PointerType::getUnqual(valType)
-    );
-
-    // Return the pointer constant
-    return constPtr;
-}
-
-/***************************************************************
-* Function: JITCompiler::getIntType()
-* Purpose : Get the integer type for a given size in bytes
-* Initial : Maxime Chevalier-Boisvert on March 25, 2009
-****************************************************************
-Revisions and bug fixes:
-*/
-llvm::Type* JITCompiler::getIntType(size_t sizeInBytes)
-{
-    // Switch on the input size
-    switch (sizeInBytes)
-    {
-        // Return the appropriate integer type
-        case 1: return llvm::Type::getInt8Ty(*s_Context);
-        case 2: return llvm::Type::getInt16Ty(*s_Context);
-        case 4: return llvm::Type::getInt32Ty(*s_Context);
-        case 8: return llvm::Type::getInt64Ty(*s_Context);
-
-        // Invalid integer sizes
-        default: assert (false);
-    }
-}
 
 /***************************************************************
 * Function: JITCompiler::getObjType()
@@ -8687,7 +8647,7 @@ llvm::Type* JITCompiler::generate_llvm_type_from_typeinfo(
                         );
             }
         default:
-            assert (false);
+            throw std::runtime_error("unexpected case");
     }
 }
 
@@ -8721,8 +8681,9 @@ std::vector<llvm::Value*> JITCompiler::generate_llvm_gep_vector(
         typeinfo = * it->second ;
 
         return rec_vector ;
+
     } else {
-        assert(false);
+        throw std::runtime_error("unexpected case");
     }
 }
 
