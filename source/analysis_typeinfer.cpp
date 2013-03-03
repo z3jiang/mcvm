@@ -21,6 +21,7 @@
 #include <iostream>
 #include <iterator>
 #include <algorithm>
+#include <stdexcept>
 
 #include "analysis_typeinfer.h"
 #include "analysis_reachdefs.h"
@@ -901,11 +902,9 @@ TypeSet inferTypesRecursive(
             }
             break;
 
-            // Other expression types
         default:
             {
-                // Do nothing
-                assert(false);
+              throw std::runtime_error("unexpected case");
             }
     }
 }
