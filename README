@@ -24,6 +24,12 @@ Required libs and headers:
 libatlas
 liblapacke
 
+RUNNING IT
+=========
+
+A natlab.sh executable script is required in the folder of the mcvm bin or on the PATH.
+It should invoke java -jar path-to-Natlab.jar $@
+
 License
 =========
 
