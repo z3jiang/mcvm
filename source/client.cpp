@@ -21,8 +21,10 @@
 #include <string>
 #include <sstream>
 #include <iostream>
+#include <fstream>
 #include <ctime>
 #include <unistd.h>
+
 #include "client.h"
 #include "filesystem.h"
 #include "xml.h"
@@ -88,8 +90,18 @@ void Client::start(const char* svrName, const int svrPortNo)
 	// open a string stream
 	std::ostringstream command;
 	
+	// if the bin is in the current folder, use it
+	// rather than let OS looking for it on PATH
+	std::string bin = FRONTEND_ENTRY_POINT;
+  std::ifstream file(FRONTEND_ENTRY_POINT);
+  if (file)
+  {
+    file.close();
+    bin = "./" + bin;
+  }
+
 	// form the command to start natlab in server mode
-        command << FRONTEND_ENTRY_POINT	<< " -sp " << serverPortNo << " " << FRONTEND_ARGUMENTS;
+        command << bin	<< " -sp " << serverPortNo << " " << FRONTEND_ARGUMENTS;
 
 	// start the service as a background process.
 	system(command.str().c_str());
@@ -324,7 +336,10 @@ Revisions and bug fixes:
 inline void Client::waitHBThread()
 {
 	// wait for the heartbeat thread to terminate
-	pthread_join(hb, 0);
+  if (hb != 0)
+  {
+    pthread_join(hb, 0);
+  }
 }
 
 /*******************************************************************
@@ -334,10 +349,18 @@ inline void Client::waitHBThread()
 ********************************************************************
 Revisions and bug fixes:
 */
-inline int Client::createHBThread()
-{	
-	// create an heartbeat thread
-	return pthread_create(&hb, 0, &heartbeat, 0);
+inline void Client::createHBThread()
+{
+#ifdef MCVM_NO_HEARTBEAT
+  std::cout << "heartbeat disabled" << std::endl;
+  return;
+#endif
+
+	int success = pthread_create(&hb, 0, &heartbeat, 0);
+	if (success != 0)
+	{
+	  throw std::runtime_error("failed to create heartbeat thread");
+	}
 }
 
 /*******************************************************************
@@ -394,6 +417,8 @@ void* Client::heartbeat(void* arg)
 		// wait for some seconds (interval)
 		sleep(MAX_INTERVAL);
 	}
+
+	return NULL;
 }
 
 /*******************************************************************

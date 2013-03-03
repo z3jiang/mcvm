@@ -10,6 +10,9 @@ CXXFLAGS = $(INCLUDE) -Wall -fmessage-length=0 -g -std=c++11
 CXXFLAGS += -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -DMCVM_USE_JIT -DMCVM_USE_EIGEN
 CXXFLAGS += -DNDEBUG
 
+# turning off heartbeat makes debugging easier
+CXXFLAGS += -DMCVM_NO_HEARTBEAT
+
 LIBS = vendor/lib/libgccpp.a  vendor/lib/libgc.a 
 LIBS += -pthread -ldl -llapacke
   
