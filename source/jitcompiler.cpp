@@ -52,7 +52,7 @@
 //FIXME
 Statement *global_stmt;
 
-ConfigVar JITCompiler::s_jitEnableVar("jit_copy_enable", ConfigVar::BOOL, "true");
+ConfigVar JITCompiler::s_jitEnableVar("jit_enable", ConfigVar::BOOL, "true");
 ConfigVar JITCompiler::s_jitCopyEnableVar("jit_copy_enable", ConfigVar::BOOL, "true");
 
 // Config variable to enable/disable on-stack replacement capability
