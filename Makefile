@@ -13,6 +13,9 @@ CXXFLAGS += -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -DMCVM_USE_JIT -DMCVM
 # turning off heartbeat makes debugging easier
 CXXFLAGS += -DMCVM_NO_HEARTBEAT
 
+# turning off heartbeat makes debugging easier
+CXXFLAGS += -DMCVM_NO_HEARTBEAT
+
 LIBS = vendor/lib/libgccpp.a  vendor/lib/libgc.a 
 LIBS += -pthread -ldl -llapacke -lcblas
   

@@ -74,7 +74,7 @@ private:
 	inline static void waitHBThread();
 		
 	// create a thread for sending heartbeat messages
-	inline static int createHBThread();
+	inline static void createHBThread();
 	
 	// generate and send hearbeat messages 
 	static void* heartbeat(void* arg);
