@@ -1,0 +1,9 @@
+calling,callee,count
+basictest,disp,1
+basictest,helperfunc,1001
+basictest,num2str,1
+basictest,rand,1
+basictest,tic,1
+basictest,toc,1
+helperfunc,fprintf,3001
+helperfunc,helperfunc,2000

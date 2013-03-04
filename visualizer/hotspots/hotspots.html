@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>McVM Hotspot Visualizer</title>
+
+    <script type="text/javascript" src="lib/jquery-1.4.2.min.js"></script>
+    <script type="text/javascript" src="lib/jquery.csv-0.71.js"></script>
+    <script type="text/javascript" src="lib/raphael-min.js"></script>
+
+    <script type="text/javascript" src="lib/dracula_graffle.js"></script>
+    <script type="text/javascript" src="lib/dracula_graph.js"></script>
+    <script type="text/javascript" src="lib/dracula_algorithms.js"></script>
+
+    <script type="text/javascript" src="hotspots.js"></script>
+
+    <style>
+      body
+      {
+        font-family: "Arial, Helvetica, sans-serif";
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="canvas"></div>
+
+    <p>
+    Counter file <input type="file" id="file" /> 
+    </p>
+
+    <p>
+    Legends:
+    <ul>
+      <li>Nodes: functions called in a program (including builtins). 
+          Nodes are draggable.</li>
+      <li>Edges: calls from one function to another. 
+          The more frequent calls, the redder and thicker an edge becomes.
+          Edge label is the number of calls recorded.
+      </li>
+    </ul>
+    </p>
+
+    <p>
+    </p>
+  </body>
+</html>

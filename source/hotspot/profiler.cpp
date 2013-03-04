@@ -143,6 +143,9 @@ void Profiler::dump()
     return;
   }
 
+  // header. the external visualizer depends on the header names
+  out << "calling,callee,count" << endl;
+
   for (FunctionCounter::iterator i = m_counter.begin();
        i != m_counter.end();
        i++)

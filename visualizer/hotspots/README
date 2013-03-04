@@ -1,0 +1,29 @@
+
+Visualizer for hotspots
+=========================
+
+
+
+Usage
+=========================
+open hotspots.html with any modern browser that supports HTML5
+
+samples directory contains some sample counters.out files
+
+
+Libraries
+=========================
+
+based on library
+http://www.graphdracula.net/
+
+which is a layer on top of http://raphaeljs.com/ (both are MIT licensed)
+
+also uses
+jquery
+jquery-csv
+
+modifications:
+properly draw self pointer edges
+
+
