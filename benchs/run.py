@@ -9,6 +9,7 @@
 # where name can be anything without spaces, and seconds can be a float
 # (leading and trailing white spaces are trimmed)
 # 
+# an additional end to end time is always recorded
 
 #############################
 
@@ -16,6 +17,7 @@ import sys
 import os
 import subprocess as sp
 import numpy
+import time
 
 if len(sys.argv) < 2:
   raise Exception("Please specify test file to execute")
@@ -43,6 +45,8 @@ timings_stock = {}
 
 def bench(executable, testfile, ret):
   print("Executing test " + testfile + " using " + executable)
+
+  t_end2end = time.time()
   p = sp.Popen([executable, testfile], stdout=sp.PIPE) # don't capture stdout
 
   while True:
@@ -55,16 +59,23 @@ def bench(executable, testfile, ret):
         continue
 
       name = line[ len('TIMING_') : colon ];
-      time = float(line[colon+1:])
+      t = float(line[colon+1:])
 
       if name in ret:
-        ret[name].append(time)
+        ret[name].append(t)
       else:
-        ret[name] = [time]
+        ret[name] = [t]
 
     if p.poll() is not None:
       break
 
+  # add end to end time
+  t_end2end = time.time() - t_end2end
+  key = 'end_to_end'
+  if key in ret:
+    ret[key].append(t_end2end)
+  else:
+    ret[key] = [t_end2end]
 
   print("Found timings: " + str(ret.keys()))
 
