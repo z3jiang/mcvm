@@ -24,6 +24,7 @@
 #include "../functions.h"
 #include "../arrayobj.h"
 #include "../objects.h"
+#include "../typeinfer.h"
 
 namespace hotspot
 {
@@ -31,7 +32,9 @@ namespace hotspot
 class FunctionSignature
 {
 public:
-  FunctionSignature(const Function* caller, const Function* callee);
+  FunctionSignature(
+      const Function* caller, const TypeSetString& callerArgs,
+      const Function* callee, const TypeSetString& calleeArgs);
   ~FunctionSignature();
 
   std::string name;
@@ -66,8 +69,8 @@ public:
     OFF, BASIC
   };
 
-  void instrumentFuncCall(Function* caller, Function* callee,
-      llvm::BasicBlock* entryBlock);
+  void instrumentFuncCall(
+      const FunctionSignature& sig, llvm::BasicBlock* entryBlock);
 
   /**
    * shutdown background threads
@@ -90,6 +93,11 @@ private:
    */
   void maintain();
   void decay();
+
+  /**
+   * dump the counter information (csv with header)
+   * to counters.out file in the current folder
+   */
   void dump();
 
   std::thread m_worker;

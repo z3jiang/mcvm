@@ -3,6 +3,9 @@ function ret = basictest()
 % test single call (jit compilation time)
 tic;
 helperfunc(0);
+helperfunc2('abc');
+helperfunc2(123);
+helperfunc2(123.0);
 t_compilation = toc;
 
 % test plain call many times (non recursive)

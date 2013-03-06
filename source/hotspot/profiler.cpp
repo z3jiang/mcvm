@@ -93,11 +93,9 @@ Profiler* Profiler::get()
   return &profiler;
 }
 
-void Profiler::instrumentFuncCall(Function* caller, Function* callee,
-    llvm::BasicBlock* entryBlock)
+void Profiler::instrumentFuncCall(
+    const FunctionSignature& sig, llvm::BasicBlock* entryBlock)
 {
-  hotspot::FunctionSignature sig = FunctionSignature(caller, callee);
-
   if (m_counter.find(sig) == m_counter.end())
   {
     m_counter[sig] = 0;
@@ -179,11 +177,72 @@ Profiler::~Profiler()
 }
 
 
-FunctionSignature::FunctionSignature(
-    const Function* caller, const Function* callee)
+string genTypeSignature(const TypeSetString& args)
 {
-  name = caller == NULL ? "" : caller->getFuncName()
-      + "," + callee->getFuncName();
+  stringstream ss;
+  ss << "(";
+
+  for (TypeSetString::const_iterator i = args.begin();
+       i != args.end();
+       i++)
+  {
+    TypeSet types = *i;
+    // why is this a set? an arg can have possible sets of types?
+
+    if (i != args.begin())
+    {
+      ss << ", ";
+    }
+
+    for (TypeSet::const_iterator j = types.begin();
+         j != types.end();
+         j++)
+    {
+      if (j != types.begin())
+      {
+        ss << "|";
+      }
+
+      // use short name. the full toString is too verbose
+      ss << DataObject::getTypeName( j->getObjType() );
+
+      if (j->isScalar())
+      {
+        ss << "S";
+      }
+
+      if (j->isInteger())
+      {
+        ss << "I";
+      }
+
+      if (j->is2D())
+      {
+        ss << "2";
+      }
+    }
+  }
+
+  ss << ")";
+  return ss.str();
+}
+
+FunctionSignature::FunctionSignature(
+    const Function* caller, const TypeSetString& callerArgs,
+    const Function* callee, const TypeSetString& calleeArgs)
+{
+  // squash everything into csv fragment
+  stringstream ss;
+  ss << "\"";
+  ss << caller->getFuncName();
+  ss << genTypeSignature(callerArgs);
+
+  ss << "\",\"";
+
+  ss << callee->getFuncName() << genTypeSignature(calleeArgs);
+  ss << "\"";
+
+  name = ss.str();
 }
 
 FunctionSignature::~FunctionSignature()

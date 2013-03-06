@@ -6377,6 +6377,53 @@ JITCompiler::ValueVector JITCompiler::compParamExpr(
     );
 }
 
+void JITCompiler::extractArgTypeString(
+    TypeSetString* retTypes, bool* retArgCountFixed,
+    const Expression::ExprVector& arguments, const VarTypeMap& varTypes,
+    CompVersion& callerVersion)
+{
+  *retArgCountFixed = true;
+
+  for (size_t i = 0; i < arguments.size(); ++i)
+  {
+    // Get a pointer to this argument expression
+    Expression* pArgExpr = arguments[i];
+
+    // Declare a type set for the possible expression types
+    TypeSet exprTypes;
+
+    // If the expression is a symbol
+    if (pArgExpr->getExprType() == Expression::ExprType::SYMBOL)
+    {
+      // Get the type set associated with the symbol
+      VarTypeMap::const_iterator typeItr = varTypes.find(
+          (SymbolExpr*) pArgExpr);
+      exprTypes = (typeItr != varTypes.end()) ? typeItr->second : TypeSet();
+
+      // Add the expression types to the type set string
+      retTypes->push_back(exprTypes);
+    }
+    else
+    {
+      // Get the type set associated with the expression
+      ExprTypeMap::const_iterator typeItr =
+          callerVersion.pTypeInferInfo->exprTypeMap.find(pArgExpr);
+      assert(typeItr != callerVersion.pTypeInferInfo->exprTypeMap.end());
+
+      // If this is a cell-indexing expression and the number of values is not 1, the argument count is not fixed
+      if (pArgExpr->getExprType() == Expression::ExprType::CELL_INDEX &&
+          typeItr->second.size() != 1)
+      {
+        *retArgCountFixed = false;
+      }
+
+      // Add the type sets to the input argument types
+      retTypes->insert(retTypes->end(), typeItr->second.begin(),
+          typeItr->second.end());
+    }
+  }
+}
+
 /***************************************************************
 * Function: JITCompiler::compFunctionCall()
 * Purpose : Compile a function call
@@ -6399,8 +6446,16 @@ JITCompiler::ValueVector JITCompiler::compFunctionCall(
         llvm::BasicBlock* pEntryBlock, 
         llvm::BasicBlock* pExitBlock)
 {
+  TypeSetString inArgTypes;
+  bool argCountFixed;
+  extractArgTypeString(&inArgTypes, &argCountFixed,
+      arguments, varTypes, callerVersion);
+
   hotspot::Profiler::get()->instrumentFuncCall(
-      callerFunction.pProgFunc, pCalleeFunc, pEntryBlock);
+      hotspot::FunctionSignature(
+          callerFunction.pProgFunc, callerVersion.inArgTypes,
+          pCalleeFunc, inArgTypes),
+      pEntryBlock);
 
     // Add the callee function to the callee set
     callerFunction.callees.insert(pCalleeFunc);
@@ -6472,45 +6527,6 @@ JITCompiler::ValueVector JITCompiler::compFunctionCall(
                 (void*)ProgFunction::setLocalEnv,
                 setArgs
             );
-        }
-    }
-
-    // Declare a type set string for the input argument types
-    TypeSetString inArgTypes;
-
-    // Declare a flag to indicate that the argument count is fixed
-    bool argCountFixed = true;
-
-    // For each input argument
-    for (size_t i = 0; i < arguments.size(); ++i)
-    {
-        // Get a pointer to this argument expression
-        Expression* pArgExpr = arguments[i];
-
-        // Declare a type set for the possible expression types
-        TypeSet exprTypes;
-
-        // If the expression is a symbol
-        if (pArgExpr->getExprType() == Expression::ExprType::SYMBOL)
-        {
-            // Get the type set associated with the symbol
-            VarTypeMap::const_iterator typeItr = varTypes.find((SymbolExpr*)pArgExpr);
-            exprTypes = (typeItr != varTypes.end())? typeItr->second:TypeSet();
-
-            // Add the expression types to the type set string
-            inArgTypes.push_back(exprTypes);
-        }
-        else
-        {
-            // Get the type set associated with the expression
-            ExprTypeMap::const_iterator typeItr = callerVersion.pTypeInferInfo->exprTypeMap.find(pArgExpr);
-            assert (typeItr != callerVersion.pTypeInferInfo->exprTypeMap.end());
-
-            // If this is a cell-indexing expression and the number of values is not 1, the argument count is not fixed
-            if (pArgExpr->getExprType() == Expression::ExprType::CELL_INDEX && typeItr->second.size() != 1)
-                argCountFixed = false;
-            // Add the type sets to the input argument types
-            inArgTypes.insert(inArgTypes.end(), typeItr->second.begin(), typeItr->second.end());
         }
     }
 
