@@ -301,6 +301,13 @@ bool ConfigManager::parseCmdArgs(int argCount, char** argVal)
 	{	
 		// Set the target file name
 		s_fileName = argVal[argCount - 1];
+
+		// strip .m. the interpreter expects function name
+		int len = s_fileName.length();
+		if (s_fileName[len-2] == '.' && s_fileName[len-1] == 'm')
+		{
+		  s_fileName = s_fileName.substr(0, len-2);
+		}
 	}
 	
 	// Nothing went wrong
