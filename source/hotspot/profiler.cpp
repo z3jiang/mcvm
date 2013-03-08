@@ -79,15 +79,24 @@ void Profiler::maintain()
   DEBUG("profiler worker thread on " << this << " exited" << endl);
 }
 
-void Profiler::notify(unsigned int* valueaddr)
-{
-  *valueaddr += 1;
-}
-
 Profiler* Profiler::get()
 {
   static Profiler profiler;
   return &profiler;
+}
+
+void buildIncr(void* valueptr, llvm::BasicBlock* bb)
+{
+  llvm::IRBuilder<> builder(bb);
+
+  llvm::Type* i32 = getIntType(4);
+
+  llvm::Value* curValue =
+      builder.CreateLoad(createPtrConst(valueptr, i32), true);
+  llvm::Value* newValue =
+      builder.CreateAdd(curValue, llvm::ConstantInt::get(i32, 1));
+  builder.CreateStore(newValue,
+      createPtrConst(valueptr, i32), true);
 }
 
 void Profiler::instrumentFuncCall(
@@ -109,17 +118,7 @@ void Profiler::instrumentFuncCall(
   DEBUG("Will instrument function call "
       << sig.toString() << " at " << value << endl);
 
-  llvm::IRBuilder<> builder(entryBlock);
-
-  llvm::Type* i32 = getIntType(4);
-
-  llvm::Value* curValue =
-      builder.CreateLoad(createPtrConst(value, i32), true);
-  llvm::Value* newValue =
-      builder.CreateAdd(curValue, llvm::ConstantInt::get(i32, 1));
-  builder.CreateStore(newValue, createPtrConst(value, i32), true);
-
-//  builder.CreateCall(m_llvmfunc, createPtrConst(value));
+  buildIncr(value, entryBlock);
 }
 
 void Profiler::instrumentLoopIter(
@@ -141,39 +140,7 @@ void Profiler::instrumentLoopIter(
   DEBUG("Will instrument loop iteration "
       << sig.toString() << " at " << value << endl);
 
-  llvm::IRBuilder<> builder(loopBody);
-
-  llvm::Type* i32 = getIntType(4);
-
-  llvm::Value* curValue =
-      builder.CreateLoad(createPtrConst(value, i32), true);
-  llvm::Value* newValue =
-      builder.CreateAdd(curValue, llvm::ConstantInt::get(i32, 1));
-  builder.CreateStore(newValue, createPtrConst(value, i32), true);
-
-  // NOTE, if we are to support concurrent threads, use CreateAtomicRMW instead
-
-//   builder.CreateCall(m_llvmfunc, createPtrConst(value));
-}
-
-
-void Profiler::initialize(llvm::ExecutionEngine* engine,
-    llvm::Module* module)
-{
-  // define the instrumentation function and link to the desired static method
-
-  llvm::IRBuilder<> builder(module->getContext());
-
-  ArgTypes argTypes;
-  argTypes.push_back(VOID_PTR_TYPE);
-
-  llvm::FunctionType *functType = llvm::FunctionType::get(
-      builder.getVoidTy(), argTypes, false);
-
-  m_llvmfunc = llvm::Function::Create(functType,
-      llvm::Function::ExternalLinkage, "_notify_profiler", module);
-
-  engine->addGlobalMapping(m_llvmfunc, (void*) &Profiler::notify);
+  buildIncr(value, loopBody);
 }
 
 
@@ -191,14 +158,14 @@ void Profiler::dump()
   // header. the external visualizer depends on the header names
   out << "calling,callee,count" << endl;
 
-  for (FunctionCounter::iterator i = m_func_counts.begin();
+  for (Counters::iterator i = m_func_counts.begin();
        i != m_func_counts.end();
        i++)
   {
     out << i->first.toString() << "," << i->second << endl;
   }
 
-  for (LoopCounter::iterator i = m_loop_counts.begin();
+  for (Counters::iterator i = m_loop_counts.begin();
        i != m_loop_counts.end();
        i++)
   {
@@ -209,12 +176,11 @@ void Profiler::dump()
   DEBUG("counters.out written" << endl);
 }
 
-template<class T>
-unsigned int max(const map<T, unsigned int>& counters)
+unsigned int max(Counters& counters)
 {
   unsigned int ret = 0;
 
-  for (typename map<T, unsigned int>::const_iterator i = counters.begin();
+  for (Counters::const_iterator i = counters.begin();
        i != counters.end();
        i++)
   {
@@ -231,10 +197,9 @@ unsigned int max(const map<T, unsigned int>& counters)
  * reduce each element in the counters map to the given percentage, e.g.
  * new = old * percentage
  */
-template<class T>
-void reduce(map<T, unsigned int>& counters, float percentage)
+void reduce(Counters& counters, float percentage)
 {
-  for (typename map<T, unsigned int>::iterator i = counters.begin();
+  for (Counters::iterator i = counters.begin();
        i != counters.end();
        i++)
   {
@@ -254,8 +219,7 @@ void reduce(map<T, unsigned int>& counters, float percentage)
   }
 }
 
-template<class T>
-void decayCounter(map<T, unsigned int>& counters)
+void decayCounter(Counters& counters)
 {
   unsigned int countermax = max(counters);
 
@@ -360,17 +324,11 @@ FunctionSignature::FunctionSignature(
   ss << callee->getFuncName() << genTypeSignature(calleeArgs);
   ss << "\"";
 
-  name = ss.str();
+  m_signature = ss.str();
 }
 
 FunctionSignature::~FunctionSignature()
 {
-}
-
-bool FunctionSignature::operator ==(
-    const FunctionSignature& another) const
-{
-  return name == another.name;
 }
 
 void Profiler::shutdown()
@@ -385,15 +343,6 @@ void Profiler::shutdown()
   dump();
 }
 
-bool FunctionSignature::operator<(const FunctionSignature& another) const
-{
-  return name < another.name;
-}
-
-const std::string& FunctionSignature::toString() const
-{
-  return name;
-}
 
 LoopSignature::LoopSignature(
     const Function* func, const TypeSetString& funcArgs,
@@ -408,26 +357,26 @@ LoopSignature::LoopSignature(
   ss << "_loop0x" << loop << "\"";
   // TODO use better readable identification than address
 
-  name = ss.str();
+  m_signature = ss.str();
 }
 
 LoopSignature::~LoopSignature()
 {
 }
 
-bool LoopSignature::operator ==(const LoopSignature& another) const
+bool Signature::operator ==(const Signature& another) const
 {
-  return name == another.name;
+  return m_signature == another.m_signature;
 }
 
-bool LoopSignature::operator <(const LoopSignature& another) const
+bool Signature::operator <(const Signature& another) const
 {
-  return name < another.name;
+  return m_signature < another.m_signature;
 }
 
-const std::string& LoopSignature::toString() const
+const std::string& Signature::toString() const
 {
-  return name;
+  return m_signature;
 }
 
 

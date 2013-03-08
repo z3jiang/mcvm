@@ -467,8 +467,6 @@ void JITCompiler::initialize()
     ConfigManager::registerVar(&s_jitOsrEnableVar);
     ConfigManager::registerVar(&s_jitOsrStrategyVar);
 
-
-    hotspot::Profiler::get()->initialize(s_pExecEngine, s_pModule);
 }
 
 /***************************************************************

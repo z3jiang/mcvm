@@ -30,38 +30,45 @@
 namespace hotspot
 {
 
-class FunctionSignature
+/**
+ * base abstract class for signatures. these are keys of counters
+ */
+class Signature
+{
+public:
+  virtual ~Signature() {};
+
+  virtual bool operator==(const Signature& another) const;
+  virtual bool operator<(const Signature& another) const;
+
+  virtual const std::string& toString() const;
+
+
+protected:
+  /**
+   * implementation classes should squash everything into m_signature
+   */
+  Signature() {};
+
+  std::string m_signature;
+};
+
+class FunctionSignature : public Signature
 {
 public:
   FunctionSignature(
       const Function* caller, const TypeSetString& callerArgs,
       const Function* callee, const TypeSetString& calleeArgs);
   ~FunctionSignature();
-
-  bool operator==(const FunctionSignature& another) const;
-  bool operator<(const FunctionSignature& another) const;
-
-  const std::string& toString() const;
-
-private:
-  std::string name;
 };
 
-class LoopSignature
+class LoopSignature : public Signature
 {
 public:
   LoopSignature(
       const Function* func, const TypeSetString& funcArgs,
       LoopStmt* loop);
   ~LoopSignature();
-
-  bool operator==(const LoopSignature& another) const;
-  bool operator<(const LoopSignature& another) const;
-
-  const std::string& toString() const;
-
-private:
-  std::string name;
 };
 
 
@@ -69,15 +76,18 @@ private:
  * NOTE: using std::map because it guarantees validity of pointer even after
  * insertion
  */
-typedef std::map<FunctionSignature, unsigned int>
-  FunctionCounter;
+typedef std::map<Signature, unsigned int> Counters;
 
 /**
- * similar to FunctionCounter, and this is for counting loop iterations
+ * hotspot profiler
+ *
+ * instruments (counts) interesting aspects of a program, at runtime, with
+ * minimal overhead
+ *
+ * interesting aspects are for example loop iterations, function calls
+ *
+ * see instrument* methods
  */
-typedef std::map<LoopSignature, unsigned int>
-  LoopCounter;
-
 class Profiler
 {
 public:
@@ -86,17 +96,12 @@ public:
   static Profiler* get();
   static void registerConfigVars();
 
-  /**
-   * initialize the profiler to work on given engine and context
-   * it's never valid to call this method twice
-   */
-  void initialize(llvm::ExecutionEngine* engine, llvm::Module* module);
-
   void instrumentFuncCall(
       const FunctionSignature& sig, llvm::BasicBlock* entryBlock);
 
   void instrumentLoopIter(
       const LoopSignature& sig, llvm::BasicBlock* loopBody);
+
 
   /**
    * shutdown background threads
@@ -105,15 +110,8 @@ public:
 
 private:
   Profiler();
-  FunctionCounter m_func_counts;
-  LoopCounter m_loop_counts;
-
-  llvm::Function* m_llvmfunc = NULL;
-
-  /**
-   * same as notify, but called from LLVM's compiled code
-   */
-  static void notify(unsigned int* addr);
+  Counters m_func_counts;
+  Counters m_loop_counts;
 
   /*
    * worker related stuff
