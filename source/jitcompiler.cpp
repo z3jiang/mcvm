@@ -3080,7 +3080,6 @@ llvm::BasicBlock* JITCompiler::compStatement(
 
     global_stmt = pStatement ; 
 
-    // If we are in verbose mode, log the statement compilation
     if (ConfigManager::s_verboseVar)
         std::cout << "Compiling statement: " << pStatement->toString() << std::endl;
 
@@ -4079,7 +4078,8 @@ llvm::BasicBlock* JITCompiler::compLoopStmt(
     llvm::IRBuilder<> initExitBuilder(initExit.first);
 
     // Create a basic block for the loop entry point
-    llvm::BasicBlock* pLoopEntryBlock = llvm::BasicBlock::Create(*s_Context, "", version.pLLVMFunc);
+    llvm::BasicBlock* pLoopEntryBlock =
+        llvm::BasicBlock::Create(*s_Context, "", version.pLLVMFunc);
     llvm::IRBuilder<> loopEntryBuilder(pLoopEntryBlock);
 
     // Declare a variable map for the loop entry
@@ -4233,6 +4233,13 @@ llvm::BasicBlock* JITCompiler::compLoopStmt(
         breakPoints,
         returnPoints
     );
+
+    // instrument loop when each iteration finishes
+    // this will miss iterations that has early exit. It's probably ok
+    // since only busy loops will be hotspots
+    hotspot::Profiler::get()->instrumentLoopIter(
+        hotspot::LoopSignature(function.pProgFunc, version.inArgTypes, pLoopStmt),
+        pLoopEntryBlock);
 
     // Add the body exit to the continue points, if specified
     if (bodyExit.first != NULL)

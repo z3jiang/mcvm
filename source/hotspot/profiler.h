@@ -25,6 +25,7 @@
 #include "../arrayobj.h"
 #include "../objects.h"
 #include "../typeinfer.h"
+#include "../loopstmts.h"
 
 namespace hotspot
 {
@@ -37,13 +38,32 @@ public:
       const Function* callee, const TypeSetString& calleeArgs);
   ~FunctionSignature();
 
-  std::string name;
-
   bool operator==(const FunctionSignature& another) const;
   bool operator<(const FunctionSignature& another) const;
 
   const std::string& toString() const;
+
+private:
+  std::string name;
 };
+
+class LoopSignature
+{
+public:
+  LoopSignature(
+      const Function* func, const TypeSetString& funcArgs,
+      LoopStmt* loop);
+  ~LoopSignature();
+
+  bool operator==(const LoopSignature& another) const;
+  bool operator<(const LoopSignature& another) const;
+
+  const std::string& toString() const;
+
+private:
+  std::string name;
+};
+
 
 /**
  * NOTE: using std::map because it guarantees validity of pointer even after
@@ -52,12 +72,19 @@ public:
 typedef std::map<FunctionSignature, unsigned int>
   FunctionCounter;
 
+/**
+ * similar to FunctionCounter, and this is for counting loop iterations
+ */
+typedef std::map<LoopSignature, unsigned int>
+  LoopCounter;
+
 class Profiler
 {
 public:
   virtual ~Profiler();
 
   static Profiler* get();
+  static void registerConfigVars();
 
   /**
    * initialize the profiler to work on given engine and context
@@ -65,12 +92,11 @@ public:
    */
   void initialize(llvm::ExecutionEngine* engine, llvm::Module* module);
 
-  enum Strategy {
-    OFF, BASIC
-  };
-
   void instrumentFuncCall(
       const FunctionSignature& sig, llvm::BasicBlock* entryBlock);
+
+  void instrumentLoopIter(
+      const LoopSignature& sig, llvm::BasicBlock* loopBody);
 
   /**
    * shutdown background threads
@@ -79,8 +105,9 @@ public:
 
 private:
   Profiler();
-  Strategy m_strat = Strategy::BASIC;
-  FunctionCounter m_counter;
+  FunctionCounter m_func_counts;
+  LoopCounter m_loop_counts;
+
   llvm::Function* m_llvmfunc = NULL;
 
   /**
@@ -101,9 +128,7 @@ private:
   void dump();
 
   std::thread m_worker;
-  std::mutex m_lock;
   volatile bool m_shutdown = false;
-  time_t m_next_decay;
 
 
 };

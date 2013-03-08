@@ -1,4 +1,4 @@
-function ret = basictest()
+function ret = basicfunctest()
 
 % test single call (jit compilation time)
 tic;

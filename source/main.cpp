@@ -29,6 +29,7 @@
 #include "parser.h"
 #include "utility.h"
 #include "client.h"
+#include "hotspot/profiler.h"
 
 #ifdef MCVM_USE_JIT
 #include "jitcompiler.h"
@@ -55,6 +56,7 @@ int main(int argc, char** argv)
 
 	// Initialize the profiler
 	Profiler::initialize();
+  hotspot::Profiler::registerConfigVars();
 
 	// Parse the command-line arguments
 	ConfigManager::parseCmdArgs(argc, argv);
