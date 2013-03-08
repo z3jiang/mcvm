@@ -1,6 +1,7 @@
 
 var data = null;
 var stats = null;
+var show_cold_edges = false;
 
 
 function redraw()
@@ -14,7 +15,7 @@ function redraw()
   draw();
 }
 
-function prepareStyle()
+function prepareStats()
 {
   stats = {};
 
@@ -33,7 +34,7 @@ function getStyle(obj)
 {
   if (stats == null)
   {
-    throw "forgot to call prepareStyle()"
+    throw "forgot to call prepareStats()"
   }
 
   // calculate hot threshold
@@ -66,10 +67,16 @@ function populateGraph(g)
 {
   console.log('creating nodes and edges');
 
-  prepareStyle();
+  prepareStats();
 
   for (var i=0; i<data.length; i++)
   {
+    var count = data[i].count;
+    if (!show_cold_edges && count < 0.05 * stats.count_max)
+    {
+      continue;
+    }
+
     var from = data[i].calling;
     var to = data[i].callee;
     var style = getStyle(data[i]);
@@ -84,6 +91,8 @@ function populateGraph(g)
 function draw()
 {
   console.log('drawing');
+
+  $('#canvas').replaceWith($('<div id="canvas" />'));
 
   var g = new Graph();
   g.edgeFactory.template.style.directed = true;
@@ -127,6 +136,14 @@ $(document).ready(function()
     };
 
     fr.readAsText(evt.target.files[0]);
+  });
+
+
+
+  $('#cb_cold_edges').change(function(evt)
+  {
+    show_cold_edges = evt.target.checked;
+    redraw();
   });
 });
 
