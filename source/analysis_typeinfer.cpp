@@ -2491,9 +2491,10 @@ TypeSetString inferTypes(
     // Lookup the symbol in the environment
     const DataObject* pObject = Environment::lookup(pLocalEnv, pSymbol);
 
-    // If the object is not a function, return no information
-    if (pObject->getType() != DataObject::Type::FUNCTION)
-        return TypeSetString();
+    if (pObject == NULL || pObject->getType() != DataObject::Type::FUNCTION)
+    {
+      return TypeSetString();
+    }
 
     // Get a typed pointer to the function
     Function* pFunction = (Function*)pObject;
