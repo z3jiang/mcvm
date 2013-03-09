@@ -14,6 +14,7 @@
 #include <thread>
 #include <ctime>
 #include <mutex>
+#include <stack>
 
 
 #include <llvm/IRBuilder.h>
@@ -59,7 +60,7 @@ public:
   FunctionSignature(
       const Function* caller, const TypeSetString& callerArgs,
       const Function* callee, const TypeSetString& calleeArgs);
-  ~FunctionSignature();
+  virtual ~FunctionSignature();
 };
 
 class LoopSignature : public Signature
@@ -68,7 +69,17 @@ public:
   LoopSignature(
       const Function* func, const TypeSetString& funcArgs,
       LoopStmt* loop);
-  ~LoopSignature();
+  virtual ~LoopSignature();
+};
+
+class InterpretedCallSignature : public Signature
+{
+public:
+  InterpretedCallSignature(
+      const Function* ownerFunc, const TypeSetString& ownFuncArgs);
+  InterpretedCallSignature(
+      const LoopStmt* ownerLoop);
+  virtual ~InterpretedCallSignature();
 };
 
 
@@ -87,6 +98,7 @@ typedef std::map<Signature, unsigned int> Counters;
  * interesting aspects are for example loop iterations, function calls
  *
  * see instrument* methods
+ * see c* methods
  */
 class Profiler
 {
@@ -102,6 +114,30 @@ public:
   void instrumentLoopIter(
       const LoopSignature& sig, llvm::BasicBlock* loopBody);
 
+  /**
+   * contextual (stateful) call
+   * instrument interpreter calls. these are known to be slow.
+   * all calls will record into the current context. see c*Context calls
+   *
+   * NOTE: I'm not a big fan of stateful API, but this is the simpliest without
+   * modifying jitcompiler.cpp much
+   */
+  void cInstrumentInterpreter(llvm::BasicBlock* bb);
+
+  /**
+   * set up a new context
+   */
+  void cPushContext(const InterpretedCallSignature& sig);
+
+  /**
+   * pop current context and use the previous context
+   */
+  void cPopContext();
+
+  /**
+   * assert to make sure contexts are properly poped
+   */
+  void cAssert() const;
 
   /**
    * shutdown background threads
@@ -112,6 +148,13 @@ private:
   Profiler();
   Counters m_func_counts;
   Counters m_loop_counts;
+
+  /**
+   * interpreted counts
+   */
+  Counters m_itpr_counts;
+
+  std::stack<Signature> m_contexts;
 
   /*
    * worker related stuff

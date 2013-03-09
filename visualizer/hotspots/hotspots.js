@@ -15,17 +15,33 @@ function redraw()
   draw();
 }
 
+function isInterpretedEdge(name)
+{
+  return name.indexOf('_interpreted') == 0;
+}
+
 function prepareStats()
 {
   stats = {};
 
   stats.count_max = 0;
+  stats.interpreted_max = 0;
 
   for (var i=0; i<data.length; i++)
   {
-    if (data[i].count > stats.count_max)
+    if (isInterpretedEdge(data[i].callee))
     {
-      stats.count_max = data[i].count;
+      if (data[i].count > stats.interpreted_max)
+      {
+        stats.interpreted_max = data[i].count;
+      }
+    }
+    else
+    {
+      if (data[i].count > stats.count_max)
+      {
+        stats.count_max = data[i].count;
+      }
     }
   }
 }
@@ -79,14 +95,39 @@ function populateGraph(g)
 
     var from = data[i].calling;
     var to = data[i].callee;
-    var style = getStyle(data[i]);
 
-    g.addEdge(from, to, style);
+    if (isInterpretedEdge(from) || isInterpretedEdge(to))
+    {
+      // don't add this as edge. show this later
+      continue;
+    }
+
+    var style = getStyle(data[i]);
+    var fromlabel = from + summarizeInterpreted(from);
+    var tolabel = to + summarizeInterpreted(to);
+
+    g.addEdge(fromlabel, tolabel, style);
 
     console.log("adding edge " + from + " -> " + to + 
         ' with style ' + JSON.stringify(style));
   }
 }
+
+function summarizeInterpreted(name)
+{
+  var ret = "";
+
+  for (var i=0; i<data.length; i++)
+  {
+    if (name == data[i].calling && isInterpretedEdge(data[i].callee))
+    {
+      ret += "\n" + data[i].callee + ": " + data[i].count;
+    }
+  }
+
+  return ret;
+}
+
 
 function draw()
 {

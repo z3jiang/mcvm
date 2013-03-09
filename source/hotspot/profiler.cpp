@@ -40,7 +40,7 @@ typedef std::vector<llvm::Type*> ArgTypes;
 ConfigVar cfgWorkerSleepMS("pWorkerSleepMS", ConfigVar::INT, "1000");
 ConfigVar cfgProfileFuncs("pFuncCalls", ConfigVar::BOOL, "true");
 ConfigVar cfgProfileLoops("pLoops", ConfigVar::BOOL, "true");
-
+ConfigVar cfgProfileInterpreter("pInterpreter", ConfigVar::BOOL, "true");
 
 void Profiler::registerConfigVars()
 {
@@ -144,6 +144,16 @@ void Profiler::instrumentLoopIter(
 }
 
 
+void dumpOne(ostream& s, const Counters& c)
+{
+  for (Counters::const_iterator i = c.begin();
+       i != c.end();
+       i++)
+  {
+    s << i->first.toString() << "," << i->second << endl;
+  }
+}
+
 void Profiler::dump()
 {
   // dump out counter information
@@ -158,19 +168,9 @@ void Profiler::dump()
   // header. the external visualizer depends on the header names
   out << "calling,callee,count" << endl;
 
-  for (Counters::iterator i = m_func_counts.begin();
-       i != m_func_counts.end();
-       i++)
-  {
-    out << i->first.toString() << "," << i->second << endl;
-  }
-
-  for (Counters::iterator i = m_loop_counts.begin();
-       i != m_loop_counts.end();
-       i++)
-  {
-    out << i->first.toString() << "," << i->second << endl;
-  }
+  dumpOne(out, m_func_counts);
+  dumpOne(out, m_loop_counts);
+  dumpOne(out, m_itpr_counts);
 
   out.close();
   DEBUG("counters.out written" << endl);
@@ -241,6 +241,7 @@ void Profiler::decay()
 {
   decayCounter(m_func_counts);
   decayCounter(m_loop_counts);
+  decayCounter(m_itpr_counts);
 }
 
 Profiler::Profiler()
@@ -354,7 +355,7 @@ LoopSignature::LoopSignature(
   ss << genTypeSignature(funcArgs);
 
   ss << "\",\"";
-  ss << "_loop0x" << loop << "\"";
+  ss << "_loop" << loop << "\"";
   // TODO use better readable identification than address
 
   m_signature = ss.str();
@@ -380,8 +381,79 @@ const std::string& Signature::toString() const
 }
 
 
+void Profiler::cInstrumentInterpreter(llvm::BasicBlock* bb)
+{
+  if (!cfgProfileInterpreter.getBoolValue())
+  {
+    return;
+  }
 
+  // let it bomb if stack is empty
+  unsigned int* value = &(m_itpr_counts[m_contexts.top()]);
+  DEBUG("Will instrument interpreted calls at " << value
+      << " in context " << m_contexts.top().toString() << endl);
+
+  buildIncr(value, bb);
+}
+
+void Profiler::cPushContext(const InterpretedCallSignature& sig)
+{
+  for (size_t i=0; i<m_contexts.size(); i++)
+  {
+    DEBUG("  ");
+  }
+  DEBUG("New context " << sig.toString() << endl);
+
+  m_contexts.push(sig);
+}
+
+void Profiler::cPopContext()
+{
+  m_contexts.pop();
+
+  for (size_t i=0; i<m_contexts.size(); i++)
+  {
+    DEBUG("  ");
+  }
+  DEBUG("Popped context" << endl);
+}
+
+void Profiler::cAssert() const
+{
+  if (!m_contexts.empty())
+  {
+    cerr << "BUG: profiler contexts not popped properly" << endl;
+  }
+}
+
+InterpretedCallSignature::InterpretedCallSignature(
+    const Function* ownerFunc, const TypeSetString& ownFuncArgs)
+{
+  stringstream ss;
+  ss << "\"";
+  ss << ownerFunc->getFuncName();
+  ss << genTypeSignature(ownFuncArgs);
+
+  ss << "\",\"_interpreted" << ownerFunc << "\"";
+
+  m_signature = ss.str();
+}
+
+InterpretedCallSignature::InterpretedCallSignature(const LoopStmt* ownerLoop)
+{
+  stringstream ss;
+  ss << "\"_loop" << ownerLoop;
+  ss << "\",\"_interpreted" << ownerLoop << "\"";
+  // TODO use better readable identification than address
+
+  m_signature = ss.str();
+}
+
+InterpretedCallSignature::~InterpretedCallSignature()
+{
+}
 
 
 } /* namespace hotspot */
+
 

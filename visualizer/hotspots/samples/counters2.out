@@ -1,0 +1,14 @@
+calling,callee,count
+"basicinterpretedtest()","disp(char arrayI)",0
+"basicinterpretedtest()","num2str(f64 matrixS2)",0
+"basicinterpretedtest()","sprintf(char arrayI2)",0
+"basicinterpretedtest()","tic()",0
+"basicinterpretedtest()","toc()",0
+"helperfunc(f64 matrixSI2)","fprintf(char arraySI2)",908598
+"helperfunc(f64 matrixSI2)","helperfunc(f64 matrixSI2)",605529
+"basicinterpretedtest()","_loop0x0x21d5af0",603
+"basicinterpretedtest()","_loop0x0x21d5b40",303066
+"_loop0x0x21d5af0","_interpreted0x21d5af0",602
+"_loop0x0x21d5b40","_interpreted0x21d5b40",302460
+"basicinterpretedtest()","_interpreted0x223df20",5
+"helperfunc(f64 matrixSI2)","_interpreted0x223de70",2422730

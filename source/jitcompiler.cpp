@@ -847,6 +847,9 @@ Revisions and bug fixes:
 */
 void JITCompiler::compileFunction(ProgFunction* pFunction, const TypeSetString& argTypeStr)
 {
+  hotspot::Profiler::get()->cPushContext(
+      hotspot::InterpretedCallSignature(pFunction, argTypeStr));
+
     // Ensure that the JIT compiler was initialized
     assert (s_pModule != NULL && s_pExecEngine != NULL);
 
@@ -1111,6 +1114,9 @@ void JITCompiler::compileFunction(ProgFunction* pFunction, const TypeSetString& 
     }
 
     PROF_STOP_TIMER(Profiler::COMP_TIME_TOTAL);
+
+
+    hotspot::Profiler::get()->cPopContext();
 }
 
 /***************************************************************
@@ -1147,6 +1153,7 @@ JITCompiler::CompVersion* JITCompiler::findFunction(ProgFunction* pFunction, Arr
         funcItr->second.versions.find(argTypeStr) == funcItr->second.versions.end())
     {
         compileFunction(pFunction, argTypeStr);
+        hotspot::Profiler::get()->cAssert();
     }
 
     // Find the compiled function object
@@ -1744,6 +1751,9 @@ JITCompiler::Value JITCompiler::readVariable(
 
         // Lookup the variable in the environment
         // through the interpreter (the safe way)
+        hotspot::Profiler::get()->cInstrumentInterpreter(
+            irBuilder.GetInsertBlock());
+
         pReadValue = createNativeCall(
             irBuilder,
             (void*)Interpreter::evalSymbol,
@@ -3187,15 +3197,22 @@ llvm::BasicBlock* JITCompiler::compStatement(
         // Loop statement
         case Statement::LOOP:
         {
-            // Compile the loop statement
-            return compLoopStmt(
-                (LoopStmt*)pStatement,
-                function,
-                version,
-                varMap,
-                exitPoint,
-                returnPoints
-            );
+          // Compile the loop statement
+          hotspot::Profiler::get()->cPushContext(
+              hotspot::InterpretedCallSignature((LoopStmt*)pStatement));
+
+          llvm::BasicBlock* ret = compLoopStmt(
+              (LoopStmt*)pStatement,
+              function,
+              version,
+              varMap,
+              exitPoint,
+              returnPoints
+          );
+
+          hotspot::Profiler::get()->cPopContext();
+
+          return ret;
         }
         break;
 
@@ -3208,9 +3225,6 @@ llvm::BasicBlock* JITCompiler::compStatement(
             // Create an llvm pointer constant for the statement pointer
             llvm::Value* pStmtPtr = createPtrConst(pStatement);
 
-            // Get the function object for the "execStatement" function
-            const NativeFunc& execStmtFunc = s_nativeMap[(void*)Interpreter::execStatement];
-
             // Create a basic block for the statement
             llvm::BasicBlock* pStmtBlock = llvm::BasicBlock::Create(*s_Context, "", version.pLLVMFunc);
             llvm::IRBuilder<> builder(pStmtBlock);
@@ -3218,7 +3232,8 @@ llvm::BasicBlock* JITCompiler::compStatement(
             // Write the symbols used by the statement to the environment
             writeVariables(builder,	function, version, varMap, pStatement->getSymbolUses());
 
-            // Create a call to execute this statement
+            hotspot::Profiler::get()->cInstrumentInterpreter(pStmtBlock);
+            const NativeFunc& execStmtFunc = s_nativeMap[(void*)Interpreter::execStatement];
             builder.CreateCall2(execStmtFunc.pLLVMFunc, pStmtPtr, pEnvObject);
 
             // Mark the symbols defined by the statement as written to the environment
@@ -3346,9 +3361,8 @@ llvm::BasicBlock* JITCompiler::compExprStmt(
     writeVariables(builder,	function, version, varMap, pExprStmt->getSymbolUses());
 
     // Get the function object for the "evalAssignStmt" function
+    hotspot::Profiler::get()->cInstrumentInterpreter(pStmtBlock);
     const NativeFunc& execStmtFunc = s_nativeMap[(void*)Interpreter::evalExprStmt];
-
-    // Create a call to execute this statement
     builder.CreateCall2(execStmtFunc.pLLVMFunc, pStmtPtr, pEnvArg);
 
     // Set the exit point parameters
@@ -3391,6 +3405,8 @@ llvm::BasicBlock* JITCompiler::compAssignStmt(
                 pAssignStmt->getSymbolUses());
 
         // Create a call to execute this statement
+        hotspot::Profiler::get()->cInstrumentInterpreter(pStmtBlock);
+
         LLVMValueVector callArgs;
         callArgs.push_back(createPtrConst(pAssignStmt));
         callArgs.push_back(getCallEnv(function, version));
@@ -4574,6 +4590,7 @@ JITCompiler::Value JITCompiler::compExpression(
         // Any other expression type
         default:
         {
+          hotspot::Profiler::get()->cInstrumentInterpreter(pEntryBlock);
             // Generate interpreter fallback code
             return exprFallback(
                 pExpression,
@@ -4646,6 +4663,7 @@ JITCompiler::Value JITCompiler::compUnaryExpr(
         default:
         {
             // Generate interpreter fallback code
+          hotspot::Profiler::get()->cInstrumentInterpreter(pEntryBlock);
             return exprFallback(
                 pUnaryExpr,
                 (void*)Interpreter::evalUnaryExpr,
@@ -4685,6 +4703,7 @@ JITCompiler::Value JITCompiler::compBinaryExpr(
     if (s_jitUseBinOpOpts.getBoolValue() == false)
     {
         // Generate interpreter fallback code
+      hotspot::Profiler::get()->cInstrumentInterpreter(pEntryBlock);
         return exprFallback(
             pBinaryExpr,
             (void*)Interpreter::evalBinaryExpr,
@@ -5239,6 +5258,7 @@ JITCompiler::Value JITCompiler::compBinaryExpr(
         default:
         {
             // Generate interpreter fallback code
+          hotspot::Profiler::get()->cInstrumentInterpreter(pEntryBlock);
             return exprFallback(
                 pBinaryExpr,
                 (void*)Interpreter::evalBinaryExpr,
@@ -6181,7 +6201,8 @@ JITCompiler::ValueVector JITCompiler::compParamExpr(
         try
         {
             // Lookup the symbol in the local environment
-            pObject = Interpreter::evalSymbol(pSymbol, ProgFunction::getLocalEnv(function.pProgFunc));
+            pObject = Interpreter::evalSymbol(
+                pSymbol, ProgFunction::getLocalEnv(function.pProgFunc));
         }
 
         // Catch any run-time error
@@ -6194,6 +6215,8 @@ JITCompiler::ValueVector JITCompiler::compParamExpr(
         if (pObject != NULL && pObject->getType() == DataObject::Type::FUNCTION)
         {
             // Compile the function call
+          hotspot::Profiler::get()->cInstrumentInterpreter(pEntryBlock);
+
             return compFunctionCall(
                 (Function*)pObject,
                 pParamExpr->getArguments(),
@@ -6367,6 +6390,7 @@ JITCompiler::ValueVector JITCompiler::compParamExpr(
     }
 
     // Generate interpreter fallback code
+    hotspot::Profiler::get()->cInstrumentInterpreter(pEntryBlock);
     return arrayExprFallback(
         pParamExpr,
         (void*)Interpreter::evalParamExpr,
@@ -6630,7 +6654,9 @@ JITCompiler::ValueVector JITCompiler::compFunctionCall(
             LLVMValueVector(1,llvm::ConstantInt::get(getIntType(sizeof(size_t)),arguments.size())));
 
         // For each argument
-        for (ParamExpr::ExprVector::const_iterator argItr = arguments.begin(); argItr != arguments.end(); ++argItr)
+        for (ParamExpr::ExprVector::const_iterator argItr = arguments.begin();
+            argItr != arguments.end();
+            ++argItr)
         {
             // Get a pointer to the argument expression
             Expression* pArgExpr = *argItr;
@@ -6641,6 +6667,8 @@ JITCompiler::ValueVector JITCompiler::compFunctionCall(
                 // Write the symbols used by the expression to the environment
                 writeVariables(currentBuilder, callerFunction, callerVersion, varMap, pArgExpr->getSymbolUses());
 
+                hotspot::Profiler::get()->cInstrumentInterpreter(
+                    currentBuilder.GetInsertBlock());
                 // Create a native call to evaluate the expresssion
                 LLVMValueVector evalArgs;
                 evalArgs.push_back(createPtrConst(pArgExpr));
@@ -7077,7 +7105,8 @@ JITCompiler::ValueVector JITCompiler::compSymbolExpr(
                 try
                 {
                     // Lookup the symbol in the local environment
-                    pObject = Interpreter::evalSymbol(pSymbolExpr, ProgFunction::getLocalEnv(function.pProgFunc));
+                    pObject = Interpreter::evalSymbol(
+                        pSymbolExpr, ProgFunction::getLocalEnv(function.pProgFunc));
                 }
 
                 // Catch any run-time error
@@ -7091,6 +7120,8 @@ JITCompiler::ValueVector JITCompiler::compSymbolExpr(
             if (pObject != NULL && pObject->getType() == DataObject::Type::FUNCTION)
             {
                 // Compile the function call
+              hotspot::Profiler::get()->cInstrumentInterpreter(pEntryBlock);
+
                 valueVector = compFunctionCall(
                     (Function*)pObject,
                     Expression::ExprVector(),
@@ -7110,6 +7141,7 @@ JITCompiler::ValueVector JITCompiler::compSymbolExpr(
             else
             {
                 // Fall back to the evalSymbolExpr method
+              hotspot::Profiler::get()->cInstrumentInterpreter(pEntryBlock);
                 valueVector = arrayExprFallback(
                     pSymbolExpr,
                     (void*)Interpreter::evalSymbolExpr,
@@ -7199,6 +7231,7 @@ JITCompiler::Value JITCompiler::compSymbolEval(
         else
         {
             // Create a native call to evaluate the symbol
+          hotspot::Profiler::get()->cInstrumentInterpreter(pEntryBlock);
             LLVMValueVector evalArgs;
             evalArgs.push_back(createPtrConst(pSymbolExpr));
             evalArgs.push_back(getCallEnv(function, version));
