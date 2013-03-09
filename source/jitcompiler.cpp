@@ -21,6 +21,7 @@
 #include <vector>
 #include <cassert>
 #include <iostream>
+#include <sstream>
 #include <llvm/Module.h>
 #include <llvm/PassManager.h>
 #include <llvm/CallingConv.h>
@@ -6453,6 +6454,39 @@ void JITCompiler::extractArgTypeString(
   }
 }
 
+void checkDeclaredAndSuppliedFuncCallArgs(
+    const Expression::ExprVector& actualArgs, Function* calledFunction)
+{
+  size_t expectedParams = -1;
+
+  if (dynamic_cast<ProgFunction*>(calledFunction) != NULL)
+  {
+    expectedParams = ((ProgFunction*)calledFunction)->getInParams().size();
+  }
+  else if (dynamic_cast<LibFunction*>(calledFunction) != NULL)
+  {
+    expectedParams = actualArgs.size();
+    // TODO where are the expected args stored? for now, just let it pass
+  }
+  else
+  {
+    std::cerr << "BUG: unexpected function type" << std::endl;
+    expectedParams = -1;
+  }
+
+  if (actualArgs.size() != expectedParams)
+  {
+    std::stringstream ss;
+    ss << "Optional function args not supported. ";
+    ss << "Caller must supply all callee declared args. ";
+    ss << "Called function: " << calledFunction->getFuncName();
+    ss << " Declared: " << actualArgs.size();
+    ss << " Supplied: " << expectedParams << std::endl;
+
+    throw std::runtime_error(ss.str());
+  }
+}
+
 /***************************************************************
 * Function: JITCompiler::compFunctionCall()
 * Purpose : Compile a function call
@@ -6475,6 +6509,8 @@ JITCompiler::ValueVector JITCompiler::compFunctionCall(
         llvm::BasicBlock* pEntryBlock, 
         llvm::BasicBlock* pExitBlock)
 {
+  checkDeclaredAndSuppliedFuncCallArgs(arguments, pCalleeFunc);
+
   TypeSetString inArgTypes;
   bool argCountFixed;
   extractArgTypeString(&inArgTypes, &argCountFixed,
