@@ -1,0 +1,8 @@
+*.o
+vendor
+build
+.tup
+*.P
+mcvm
+*~
+*.swp
