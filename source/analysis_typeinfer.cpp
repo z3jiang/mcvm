@@ -363,12 +363,15 @@ void inferTypes(
         // Reduce and store the variable type map after this statement
         postTypeMap[pStmt] = curMap;
 
-        PRDEBUG("***** Type inference after stmt ********\n"
-                "%s\n"
-                "**********************\n"
-                "%s\n",
-                pStmt->toString().c_str(),
-                streamToString(curMap).c_str()) ;
+        if (ConfigManager::s_verboseVar.getBoolValue())
+        {
+          PRDEBUG("***** Type inference after stmt ********\n"
+                  "%s\n"
+                  "**********************\n"
+                  "%s\n",
+                  pStmt->toString().c_str(),
+                  streamToString(curMap).c_str());
+        }
     }
 
     // Store the type map at the exit point
@@ -400,6 +403,7 @@ void inferTypes(
     ExprTypeMap& exprTypeMap
 )
 {
+  if (ConfigManager::s_verboseVar.getBoolValue())
     PRDEBUG("-------IfElse Stmt-------\n");
 
     // Get the condition expression
@@ -429,7 +433,8 @@ void inferTypes(
         exprTypeMap
     );
 
-    PRDEBUG("Type infered for If block:\n%s\n", 
+    if (ConfigManager::s_verboseVar.getBoolValue())
+      PRDEBUG("Type infered for If block:\n%s\n",
             streamToString(ifVarTypes).c_str());
 
     // Get the type information for the else block statements
@@ -448,13 +453,15 @@ void inferTypes(
         exprTypeMap
     );
 
-    PRDEBUG("Type infered for Else block:\n%s\n", 
+    if (ConfigManager::s_verboseVar.getBoolValue())
+      PRDEBUG("Type infered for Else block:\n%s\n",
             streamToString(elseVarTypes).c_str());
 
     // Compute the exit variable type map as the union of the maps of the if and else blocks
     exitMap = varTypeMapUnion(ifVarTypes, elseVarTypes);
 
-    PRDEBUG("Type infered at exit:\n%s\n", 
+    if (ConfigManager::s_verboseVar.getBoolValue())
+      PRDEBUG("Type infered at exit:\n%s\n",
             streamToString(exitMap).c_str());
 }
 
@@ -1047,7 +1054,8 @@ void inferTypes(
                     varTypes,
                     exprTypeMap) ;
 
-            PRDEBUG("Returned type set is:\n%s",
+            if (ConfigManager::s_verboseVar.getBoolValue())
+              PRDEBUG("Returned type set is:\n%s",
                     streamToString(ts).c_str()); 
 
             varTypes[pLeftExpr->getRootSymbol()] = ts ;

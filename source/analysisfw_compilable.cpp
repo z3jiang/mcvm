@@ -34,7 +34,7 @@ Runner create(ProgFunction* pf, TypeInferInfo typeinfered) {
      */
     result.assign_ = [] (const TypeCompilable& in, const AssignStmt* stmt) {
         TypeCompilable ret ;
-        std::cout << stmt->toString() ;
+        //std::cout << stmt->toString() ;
         return ret;
     };
 

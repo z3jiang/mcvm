@@ -10,8 +10,9 @@
 
 #include <string>
 #include <iostream>
+#include "configmanager.h"
 
-#define ISDEBUG 1
+#define ISDEBUG ConfigManager::s_verboseVar.getBoolValue()
 #define DEBUG(stuff) if (ISDEBUG) {std::cout << stuff;}
 
 #endif /* DEBUG_H_ */
