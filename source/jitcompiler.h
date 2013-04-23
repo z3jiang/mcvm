@@ -351,6 +351,11 @@ private:
 	
 	// Binary operator factory function type definition
 	typedef llvm::Value* (*BINOP_FACTORY_FUNC)(llvm::IRBuilder<>& builder, llvm::Value* pLVal, llvm::Value* pRVal);
+
+  static void extractArgTypeString(TypeSetString* retTypes, bool* retVarArgs,
+      const Expression::ExprVector& arguments,
+      const VarTypeMap& varTypes, CompVersion& callerVersion);
+
 	
 	// Methods to create binary LLVM instructions
 	static llvm::Value* createAddInstr(llvm::IRBuilder<>& builder, llvm::Value* pLVal, llvm::Value* pRVal);

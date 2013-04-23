@@ -47,6 +47,8 @@
 #include "matrixops.h"
 #include "transform_logic.h"
 #include "transform_split.h"
+#include "hotspot/profiler.h"
+#include "utils/llvmutils.h"
 
 // Config variable to enable/disable the JIT compiler
 ConfigVar JITCompiler::s_jitEnableVar("jit_enable", ConfigVar::BOOL, "true");
@@ -150,6 +152,8 @@ void JITCompiler::initialize()
     llvm::InitializeNativeTarget();
 
     s_Context = new llvm::LLVMContext() ;
+    LLVMUtils::initialize(s_Context);
+
 
     VOID_PTR_TYPE = llvm::PointerType::getUnqual(llvm::Type::getInt8Ty(*s_Context));
     
@@ -486,6 +490,8 @@ N.A. Lameed, 2011, 2012.
 */
 void JITCompiler::shutdown()
 {
+  hotspot::Profiler::get()->shutdown();
+
 	delete s_pFunctionPasses;
 	delete s_pPrintPass;
 
@@ -838,6 +844,9 @@ Revisions and bug fixes:
 */
 void JITCompiler::compileFunction(ProgFunction* pFunction, const TypeSetString& argTypeStr)
 {
+  hotspot::Profiler::get()->cPushContext(
+      hotspot::InterpretedCallSignature(pFunction, argTypeStr));
+
 	// Ensure that the JIT compiler was initialized
 	assert (s_pModule != NULL && s_pExecEngine != NULL);
 	
@@ -1101,6 +1110,9 @@ void JITCompiler::compileFunction(ProgFunction* pFunction, const TypeSetString& 
 	}
 	
 	PROF_STOP_TIMER(Profiler::COMP_TIME_TOTAL);
+
+
+  hotspot::Profiler::get()->cPopContext();
 }
 
 /***************************************************************
@@ -1137,6 +1149,7 @@ ArrayObj* JITCompiler::callFunction(ProgFunction* pFunction, ArrayObj* pArgument
 	{
 		// Compile the requested function version
 		compileFunction(pFunction, argTypeStr);
+    hotspot::Profiler::get()->cAssert();
 	}
 	
 	// Find the compiled function object
@@ -1723,6 +1736,10 @@ JITCompiler::Value JITCompiler::readVariable(
 		// If we are in verbose mode, log the safe read
 		if (ConfigManager::s_verboseVar)
 			std::cout << "Adding safe read of: " << pSymbol->toString() << std::endl;
+
+    hotspot::Profiler::get()->cInstrumentInterpreter(
+        irBuilder.GetInsertBlock());
+
 		
 		// Lookup the variable in the environment
 		// through the interpreter (the safe way)
@@ -3133,15 +3150,21 @@ llvm::BasicBlock* JITCompiler::compStatement(
 		// Loop statement
 		case Statement::LOOP:
 		{
-			// Compile the loop statement
-			return compLoopStmt(
-				(LoopStmt*)pStatement,
-				function,
-				version,
-				varMap,
-				exitPoint,
-				returnPoints
-			);
+      hotspot::Profiler::get()->cPushContext(
+          hotspot::InterpretedCallSignature((LoopStmt*)pStatement));
+
+      llvm::BasicBlock* ret = compLoopStmt(
+          (LoopStmt*)pStatement,
+          function,
+          version,
+          varMap,
+          exitPoint,
+          returnPoints
+          );
+
+      hotspot::Profiler::get()->cPopContext();
+
+      return ret;
 		}
 		break;
 			
@@ -3163,6 +3186,7 @@ llvm::BasicBlock* JITCompiler::compStatement(
 			
 			// Write the symbols used by the statement to the environment
 			writeVariables(builder,	function, version, varMap, pStatement->getSymbolUses());
+      hotspot::Profiler::get()->cInstrumentInterpreter(pStmtBlock);
 			
 			// Create a call to execute this statement
 			builder.CreateCall2(execStmtFunc.pLLVMFunc, pStmtPtr, pEnvObject);
@@ -3330,6 +3354,8 @@ llvm::BasicBlock* JITCompiler::compAssignStmt(
 		// Write the symbols used by the statement to the environment
 		writeVariables(builder, function, version, varMap, pAssignStmt->getSymbolUses());
 		
+    hotspot::Profiler::get()->cInstrumentInterpreter(pStmtBlock);
+
 		// Create a call to execute this statement
 		LLVMValueVector callArgs;
 		callArgs.push_back(createPtrConst(pAssignStmt));
@@ -4119,6 +4145,10 @@ llvm::BasicBlock* JITCompiler::compLoopStmt(
 		returnPoints
 	);	
 	
+  hotspot::Profiler::get()->instrumentLoopIter(
+      hotspot::LoopSignature(function.pProgFunc, version.inArgTypes, pLoopStmt),
+      pLoopEntryBlock);
+
 	// Add the body exit to the continue points, if specified
 	if (bodyExit.first != NULL)
 		contPoints.push_back(bodyExit);
@@ -4438,6 +4468,7 @@ JITCompiler::Value JITCompiler::compExpression(
 		// Any other expression type
 		default:
 		{
+      hotspot::Profiler::get()->cInstrumentInterpreter(pEntryBlock);
 			// Generate interpreter fallback code
 			return exprFallback(
 				pExpression,
@@ -4549,6 +4580,7 @@ JITCompiler::Value JITCompiler::compBinaryExpr(
 	if (s_jitUseBinOpOpts.getBoolValue() == false)
 	{
 		// Generate interpreter fallback code
+    hotspot::Profiler::get()->cInstrumentInterpreter(pEntryBlock);
 		return exprFallback(
 			pBinaryExpr,
 			(void*)Interpreter::evalBinaryExpr,
@@ -5103,6 +5135,7 @@ JITCompiler::Value JITCompiler::compBinaryExpr(
 		default:
 		{
 			// Generate interpreter fallback code
+      hotspot::Profiler::get()->cInstrumentInterpreter(pEntryBlock);
 			return exprFallback(
 				pBinaryExpr,
 				(void*)Interpreter::evalBinaryExpr,
@@ -6031,6 +6064,7 @@ JITCompiler::ValueVector JITCompiler::compParamExpr(
 		if (pObject != NULL && pObject->getType() == DataObject::FUNCTION)
 		{
 			// Compile the function call
+      hotspot::Profiler::get()->cInstrumentInterpreter(pEntryBlock);
 			return compFunctionCall(
 				(Function*)pObject,
 				pParamExpr->getArguments(),
@@ -6205,6 +6239,7 @@ JITCompiler::ValueVector JITCompiler::compParamExpr(
 	}
 
 	// Generate interpreter fallback code
+  hotspot::Profiler::get()->cInstrumentInterpreter(pEntryBlock);
 	return arrayExprFallback(
 		pParamExpr,
 		(void*)Interpreter::evalParamExpr,
@@ -6220,6 +6255,87 @@ JITCompiler::ValueVector JITCompiler::compParamExpr(
 	);
 }
 
+
+void checkDeclaredAndSuppliedFuncCallArgs(
+        const Expression::ExprVector& actualArgs, Function* calledFunction)
+{
+  size_t expectedParams = -1;
+
+  if (dynamic_cast<ProgFunction*>(calledFunction) != NULL)
+  {
+    expectedParams = ((ProgFunction*)calledFunction)->getInParams().size();
+  }
+  else if (dynamic_cast<LibFunction*>(calledFunction) != NULL)
+  {
+    expectedParams = actualArgs.size();
+    // TODO where are the expected args stored? for now, just let it pass
+  }
+  else
+  {
+    std::cerr << "BUG: unexpected function type" << std::endl;
+    expectedParams = -1;
+  }
+
+  if (actualArgs.size() != expectedParams)
+  {
+    std::stringstream ss;
+    ss << "Optional function args not supported. ";
+    ss << "Caller must supply all callee declared args. ";
+    ss << "Called function: " << calledFunction->getFuncName();
+    ss << " Declared: " << actualArgs.size();
+    ss << " Supplied: " << expectedParams << std::endl;
+
+    throw std::runtime_error(ss.str());
+  }
+}
+
+void JITCompiler::extractArgTypeString(
+    TypeSetString* retTypes, bool* retArgCountFixed,
+    const Expression::ExprVector& arguments, const VarTypeMap& varTypes,
+    CompVersion& callerVersion)
+{
+  *retArgCountFixed = true;
+
+  for (size_t i = 0; i < arguments.size(); ++i)
+  {
+    // Get a pointer to this argument expression
+    Expression* pArgExpr = arguments[i];
+
+    // Declare a type set for the possible expression types
+    TypeSet exprTypes;
+
+    // If the expression is a symbol
+    if (pArgExpr->getExprType() == Expression::ExprType::SYMBOL)
+    {
+      // Get the type set associated with the symbol
+      VarTypeMap::const_iterator typeItr = varTypes.find(
+          (SymbolExpr*) pArgExpr);
+      exprTypes = (typeItr != varTypes.end()) ? typeItr->second : TypeSet();
+
+      // Add the expression types to the type set string
+      retTypes->push_back(exprTypes);
+    }
+    else
+    {
+      // Get the type set associated with the expression
+      ExprTypeMap::const_iterator typeItr =
+          callerVersion.pTypeInferInfo->exprTypeMap.find(pArgExpr);
+      assert(typeItr != callerVersion.pTypeInferInfo->exprTypeMap.end());
+
+      // If this is a cell-indexing expression and the number of values is not 1, the argument count is not fixed
+      if (pArgExpr->getExprType() == Expression::ExprType::CELL_INDEX &&
+          typeItr->second.size() != 1)
+      {
+        *retArgCountFixed = false;
+      }
+
+      // Add the type sets to the input argument types
+      retTypes->insert(retTypes->end(), typeItr->second.begin(),
+          typeItr->second.end());
+    }
+  }
+}
+
 /***************************************************************
 * Function: JITCompiler::compFunctionCall()
 * Purpose : Compile a function call
@@ -6233,6 +6349,21 @@ JITCompiler::ValueVector JITCompiler::compFunctionCall(Function* pCalleeFunc,
 	const Expression::SymbolSet& liveVars, const VarDefMap& reachDefs, const VarTypeMap& varTypes,
 	VariableMap& varMap, llvm::BasicBlock* pEntryBlock, llvm::BasicBlock* pExitBlock)
 {	
+  checkDeclaredAndSuppliedFuncCallArgs(arguments, pCalleeFunc);
+
+  TypeSetString inArgTypes;
+  bool argCountFixed;
+  extractArgTypeString(&inArgTypes, &argCountFixed,
+      arguments, varTypes, callerVersion);
+
+  hotspot::Profiler::get()->instrumentFuncCall(
+      hotspot::FunctionSignature(
+        callerFunction.pProgFunc, callerVersion.inArgTypes,
+        pCalleeFunc, inArgTypes),
+      pEntryBlock);
+
+
+
 	// Add the callee function to the callee set
 	callerFunction.callees.insert(pCalleeFunc);
 	
@@ -6301,45 +6432,6 @@ JITCompiler::ValueVector JITCompiler::compFunctionCall(Function* pCalleeFunc,
 				(void*)ProgFunction::setLocalEnv,
 				setArgs
 			);
-		}
-	}
-	
-	// Declare a type set string for the input argument types
-	TypeSetString inArgTypes;
-
-	// Declare a flag to indicate that the argument count is fixed
-	bool argCountFixed = true;
-	
-	// For each input argument
-	for (size_t i = 0; i < arguments.size(); ++i)
-	{
-		// Get a pointer to this argument expression
-		Expression* pArgExpr = arguments[i];
-		
-		// Declare a type set for the possible expression types
-		TypeSet exprTypes;
-		
-		// If the expression is a symbol
-		if (pArgExpr->getExprType() == Expression::SYMBOL)
-		{
-			// Get the type set associated with the symbol
-			VarTypeMap::const_iterator typeItr = varTypes.find((SymbolExpr*)pArgExpr);
-			exprTypes = (typeItr != varTypes.end())? typeItr->second:TypeSet();
-
-			// Add the expression types to the type set string
-			inArgTypes.push_back(exprTypes);
-		}
-		else
-		{
-			// Get the type set associated with the expression
-			ExprTypeMap::const_iterator typeItr = callerVersion.pTypeInferInfo->exprTypeMap.find(pArgExpr);
-			assert (typeItr != callerVersion.pTypeInferInfo->exprTypeMap.end());			
-			
-			// If this is a cell-indexing expression and the number of values is not 1, the argument count is not fixed
-			if (pArgExpr->getExprType() == Expression::CELL_INDEX && typeItr->second.size() != 1)
-				argCountFixed = false;
-			// Add the type sets to the input argument types
-			inArgTypes.insert(inArgTypes.end(), typeItr->second.begin(), typeItr->second.end());
 		}
 	}
 	
@@ -6885,6 +6977,7 @@ JITCompiler::ValueVector JITCompiler::compSymbolExpr(
 			}
 			else
 			{			
+        hotspot::Profiler::get()->cInstrumentInterpreter(pEntryBlock);
 				// Fall back to the evalSymbolExpr method
 				valueVector = arrayExprFallback(
 					pSymbolExpr,
@@ -6974,6 +7067,7 @@ JITCompiler::Value JITCompiler::compSymbolEval(
 		}
 		else
 		{
+      hotspot::Profiler::get()->cInstrumentInterpreter(pEntryBlock);
 			// Create a native call to evaluate the symbol
 			LLVMValueVector evalArgs;
 			evalArgs.push_back(createPtrConst(pSymbolExpr));
@@ -8464,3 +8558,4 @@ llvm::Constant* JITCompiler::getObjType(DataObject::Type objType)
 	// Get the integer constant for the object type
 	return llvm::ConstantInt::get(getIntType(sizeof(DataObject::Type)), objType);	
 }
+
