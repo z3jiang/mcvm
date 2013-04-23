@@ -22,7 +22,7 @@ import time
 if len(sys.argv) < 2:
   raise Exception("Please specify test file to execute")
 
-iterations = 5
+iterations = 20
 
 testfile = sys.argv[1]
 
@@ -112,13 +112,13 @@ for name in names:
 
   print("Timing: " + name)
 
-  print("  Stock: mean %.2f\t\tmin %.2f\t\tmax %.2f\t\tstd %.2f" % 
+  print("  Stock: mean %.6f\t\tmin %.6f\t\tmax %.6f\t\tstd %.6f" % 
       (stock[2], stock[0], stock[1], stock[3]))
-  print("  New:   mean %.2f\t\tmin %.2f\t\tmax %.2f\t\tstd %.2f" % 
+  print("  New:   mean %.6f\t\tmin %.6f\t\tmax %.6f\t\tstd %.6f" % 
       (new[2], new[0], new[1], new[3]))
 
-  print("  Diff:  mean %.2f(%.2f%%)\tmin %.2f(%.2f%%)\
-      \tmax %.2f(%.2f%%)\t\tstd %.2f(%.2f%%)" % 
+  print("  Diff:  mean %.6f(%.2f%%)\tmin %.6f(%.2f%%)\
+      \tmax %.6f(%.2f%%)\t\tstd %.6f(%.2f%%)" % 
       (comp[2][0], 100*comp[2][1], 
        comp[0][0], 100*comp[0][1], 
        comp[1][0], 100*comp[1][1], 

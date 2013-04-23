@@ -9,7 +9,7 @@ t_empty_loop = toc;
 
 tic;
 for i=1:100000
-  for j=1:10000
+  for j=1:50000
   end
 end
 t_nested_loop = toc;

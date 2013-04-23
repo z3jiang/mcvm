@@ -2,16 +2,9 @@ function basicinterpretedtest()
 
 % statements without ; are for sure interpreted
 
-helperfunc(0)
-helperfunc(1)
-
 tic;
-for i=1:1000
-  helperfunc(1)
-
-  for j=1:500
-    helperfunc(2)
-  end
+for i=1:2000000
+  1
 end
 t = toc;
 

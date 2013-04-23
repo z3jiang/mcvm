@@ -10,25 +10,25 @@ t_compilation = toc;
 
 % test plain call many times (non recursive)
 tic;
-for i = 1:5000000
+for i = 1:5000000000
   helperfunc(0);
 end
 t_simple_5000k = toc;
 
 % recursive calls
 tic;
-for i = 1:50000
+for i = 1:25000000
   helperfunc(100);
 end
 t_simple_50k_r100 = toc;
 
 
 % call embedded with matrix stuff
-ret = rand(100);
+ret = rand(5);
 
 tic;
 
-for i = 1:2000
+for i = 1:2000000
   ret = ret * ret;
   helperfunc(10);
 end
